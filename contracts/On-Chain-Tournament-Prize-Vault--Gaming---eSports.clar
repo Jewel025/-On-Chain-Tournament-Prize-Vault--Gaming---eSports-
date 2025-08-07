@@ -5,6 +5,9 @@
 (define-constant err-invalid-amount (err u103))
 (define-constant err-not-active (err u104))
 (define-constant err-already-registered (err u105))
+(define-constant err-invalid-ratios (err u106))
+(define-constant err-already-distributed (err u107))
+(define-constant err-invalid-placement (err u108))
 
 (define-data-var total-tournaments uint u0)
 (define-data-var total-proposals uint u0)
@@ -18,7 +21,8 @@
         end-time: uint,
         game: (string-ascii 50),
         is-active: bool,
-        winner: (optional principal)
+        winner: (optional principal),
+        prizes-distributed: bool
     }
 )
 
@@ -41,6 +45,20 @@
     }
 )
 
+(define-map prize-distributions
+    { tournament-id: uint }
+    {
+        first-place-percent: uint,
+        second-place-percent: uint,
+        third-place-percent: uint
+    }
+)
+
+(define-map tournament-placements
+    { tournament-id: uint, placement: uint }
+    { winner: principal }
+)
+
 (define-public (create-tournament (name (string-ascii 50)) (game (string-ascii 50)) (start-time uint) (end-time uint))
     (let ((tournament-id (var-get total-tournaments)))
         (asserts! (is-eq tx-sender contract-owner) err-owner-only)
@@ -54,7 +72,16 @@
                 end-time: end-time,
                 game: game,
                 is-active: true,
-                winner: none
+                winner: none,
+                prizes-distributed: false
+            }
+        )
+        (map-insert prize-distributions
+            { tournament-id: tournament-id }
+            {
+                first-place-percent: u100,
+                second-place-percent: u0,
+                third-place-percent: u0
             }
         )
         (var-set total-tournaments (+ tournament-id u1))
@@ -143,4 +170,113 @@
 
 (define-read-only (get-participant-status (tournament-id uint) (player principal))
     (ok (unwrap! (map-get? participant-badges { tournament-id: tournament-id, player: player }) err-not-found))
+)
+
+(define-public (set-prize-distribution (tournament-id uint) (first-percent uint) (second-percent uint) (third-percent uint))
+    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (get is-active tournament) err-not-active)
+        (asserts! (is-eq (+ first-percent second-percent third-percent) u100) err-invalid-ratios)
+        (map-set prize-distributions
+            { tournament-id: tournament-id }
+            {
+                first-place-percent: first-percent,
+                second-place-percent: second-percent,
+                third-place-percent: third-percent
+            }
+        )
+        (ok true)
+    )
+)
+
+(define-public (declare-tournament-winners (tournament-id uint) (first-place principal) (second-place (optional principal)) (third-place (optional principal)))
+    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (get is-active tournament) err-not-active)
+        (asserts! (is-some (map-get? participant-badges { tournament-id: tournament-id, player: first-place })) err-not-found)
+        (asserts! (not (get prizes-distributed tournament)) err-already-distributed)
+        
+        (match second-place 
+            some-second (asserts! (is-some (map-get? participant-badges { tournament-id: tournament-id, player: some-second })) err-not-found)
+            true
+        )
+        (match third-place 
+            some-third (asserts! (is-some (map-get? participant-badges { tournament-id: tournament-id, player: some-third })) err-not-found)
+            true
+        )
+        
+        (map-insert tournament-placements { tournament-id: tournament-id, placement: u1 } { winner: first-place })
+        (match second-place 
+            some-second (map-insert tournament-placements { tournament-id: tournament-id, placement: u2 } { winner: some-second })
+            true
+        )
+        (match third-place 
+            some-third (map-insert tournament-placements { tournament-id: tournament-id, placement: u3 } { winner: some-third })
+            true
+        )
+        
+        (map-set tournaments
+            { tournament-id: tournament-id }
+            (merge tournament 
+                {
+                    is-active: false,
+                    winner: (some first-place)
+                }
+            )
+        )
+        (ok true)
+    )
+)
+
+(define-public (distribute-prizes (tournament-id uint))
+    (let 
+        (
+            (tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found))
+            (distribution (unwrap! (map-get? prize-distributions { tournament-id: tournament-id }) err-not-found))
+            (prize-pool (get prize-pool tournament))
+            (first-winner (unwrap! (get winner (map-get? tournament-placements { tournament-id: tournament-id, placement: u1 })) err-not-found))
+            (second-winner (get winner (map-get? tournament-placements { tournament-id: tournament-id, placement: u2 })))
+            (third-winner (get winner (map-get? tournament-placements { tournament-id: tournament-id, placement: u3 })))
+        )
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (not (get is-active tournament)) err-not-active)
+        (asserts! (not (get prizes-distributed tournament)) err-already-distributed)
+        
+        (let ((first-prize (/ (* prize-pool (get first-place-percent distribution)) u100)))
+            (try! (as-contract (stx-transfer? first-prize tx-sender first-winner)))
+        )
+        
+        (match second-winner
+            some-second 
+                (let ((second-prize (/ (* prize-pool (get second-place-percent distribution)) u100)))
+                    (try! (as-contract (stx-transfer? second-prize tx-sender some-second)))
+                )
+            true
+        )
+        
+        (match third-winner
+            some-third 
+                (let ((third-prize (/ (* prize-pool (get third-place-percent distribution)) u100)))
+                    (try! (as-contract (stx-transfer? third-prize tx-sender some-third)))
+                )
+            true
+        )
+        
+        (map-set tournaments
+            { tournament-id: tournament-id }
+            (merge tournament { prizes-distributed: true })
+        )
+        (ok true)
+    )
+)
+
+(define-read-only (get-prize-distribution (tournament-id uint))
+    (ok (unwrap! (map-get? prize-distributions { tournament-id: tournament-id }) err-not-found))
+)
+
+(define-read-only (get-tournament-winner (tournament-id uint) (placement uint))
+    (if (and (>= placement u1) (<= placement u3))
+        (ok (map-get? tournament-placements { tournament-id: tournament-id, placement: placement }))
+        err-invalid-placement
+    )
 )
