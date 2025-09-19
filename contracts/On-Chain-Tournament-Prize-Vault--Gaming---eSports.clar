@@ -270,6 +270,19 @@
     )
 )
 
+(define-public (extend-tournament (tournament-id uint) (new-end-time uint))
+    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (get is-active tournament) err-not-active)
+        (asserts! (> new-end-time (get end-time tournament)) err-invalid-amount)
+        (map-set tournaments
+            { tournament-id: tournament-id }
+            (merge tournament { end-time: new-end-time })
+        )
+        (ok true)
+    )
+)
+
 (define-read-only (get-prize-distribution (tournament-id uint))
     (ok (unwrap! (map-get? prize-distributions { tournament-id: tournament-id }) err-not-found))
 )
