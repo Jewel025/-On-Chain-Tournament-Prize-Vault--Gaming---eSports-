@@ -1,4 +1,4 @@
-# 🎮 On-Chain Tournament Prize Vault
+#  On-Chain Tournament Prize Vault
 
 > Bringing transparency and automation to eSports prize pools! 🏆
 
@@ -21,6 +21,8 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 - `register-player`: Register players for tournaments
 - `stake-tokens`: Add tokens to prize pool
 - `declare-winner`: Distribute prizes to winners
+- `cancel-tournament`: Cancel active tournaments
+- `refund-stakes`: Refund stakes for cancelled tournaments
 
 ### Community Features
 - `propose-game`: Suggest new games
@@ -37,6 +39,7 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 3. Players register using `register-player`
 4. Community members can stake tokens
 5. Owner declares winner and prizes are distributed automatically
+6. Owner can cancel tournaments if needed and refund stakes
 
 ## Development
 

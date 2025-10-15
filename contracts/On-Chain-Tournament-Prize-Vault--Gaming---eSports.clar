@@ -8,11 +8,13 @@
 (define-constant err-invalid-ratios (err u106))
 (define-constant err-already-distributed (err u107))
 (define-constant err-invalid-placement (err u108))
+(define-constant err-already-cancelled (err u109))
+(define-constant err-not-cancelled (err u110))
 
 (define-data-var total-tournaments uint u0)
 (define-data-var total-proposals uint u0)
 
-(define-map tournaments 
+(define-map tournaments
     { tournament-id: uint }
     {
         name: (string-ascii 50),
@@ -22,7 +24,8 @@
         game: (string-ascii 50),
         is-active: bool,
         winner: (optional principal),
-        prizes-distributed: bool
+        prizes-distributed: bool,
+        cancelled: bool
     }
 )
 
@@ -73,7 +76,8 @@
                 game: game,
                 is-active: true,
                 winner: none,
-                prizes-distributed: false
+                prizes-distributed: false,
+                cancelled: false
             }
         )
         (map-insert prize-distributions
@@ -291,5 +295,31 @@
     (if (and (>= placement u1) (<= placement u3))
         (ok (map-get? tournament-placements { tournament-id: tournament-id, placement: placement }))
         err-invalid-placement
+    )
+)
+
+(define-public (cancel-tournament (tournament-id uint))
+    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (get is-active tournament) err-not-active)
+        (asserts! (not (get cancelled tournament)) err-already-cancelled)
+        (map-set tournaments
+            { tournament-id: tournament-id }
+            (merge tournament { is-active: false, cancelled: true })
+        )
+        (ok true)
+    )
+)
+
+(define-public (refund-stakes (tournament-id uint))
+    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+        (asserts! (get cancelled tournament) err-not-cancelled)
+        (asserts! (not (get prizes-distributed tournament)) err-already-distributed)
+        (let ((stake (unwrap! (map-get? tournament-stakes { tournament-id: tournament-id, staker: tx-sender }) err-not-found)))
+            (try! (as-contract (stx-transfer? (get amount stake) tx-sender tx-sender)))
+            (map-delete tournament-stakes { tournament-id: tournament-id, staker: tx-sender })
+        )
+        (ok true)
     )
 )
