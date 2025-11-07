@@ -13,6 +13,7 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 - 🏅 NFT participation badges
 - 💰 Community staking
 - 🎲 Game proposal system
+- 🎁 Tournament sponsorship system
 
 ## Smart Contract Functions
 
@@ -27,10 +28,12 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 ### Community Features
 - `propose-game`: Suggest new games
 - `vote-game-proposal`: Vote on game proposals
+- `sponsor-tournament`: Enable external sponsorships to boost prize pools
 
 ### Read-Only Functions
 - `get-tournament-info`: View tournament details
 - `get-participant-status`: Check player registration
+- `get-sponsor-contribution`: Track sponsorship amounts per tournament
 
 ## Usage
 
@@ -38,8 +41,9 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 2. Create a tournament using `create-tournament`
 3. Players register using `register-player`
 4. Community members can stake tokens
-5. Owner declares winner and prizes are distributed automatically
-6. Owner can cancel tournaments if needed and refund stakes
+5. External sponsors can contribute to prize pools via `sponsor-tournament`
+6. Owner declares winner and prizes are distributed automatically
+7. Owner can cancel tournaments if needed and refund stakes
 
 ## Development
 

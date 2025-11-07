@@ -58,9 +58,14 @@
 )
 
 (define-map tournament-placements
-    { tournament-id: uint, placement: uint }
-    { winner: principal }
-)
+     { tournament-id: uint, placement: uint }
+     { winner: principal }
+ )
+
+(define-map sponsor-contributions
+     { tournament-id: uint, sponsor: principal }
+     { amount: uint }
+ )
 
 (define-public (create-tournament (name (string-ascii 50)) (game (string-ascii 50)) (start-time uint) (end-time uint))
     (let ((tournament-id (var-get total-tournaments)))
@@ -312,14 +317,37 @@
 )
 
 (define-public (refund-stakes (tournament-id uint))
-    (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
-        (asserts! (is-eq tx-sender contract-owner) err-owner-only)
-        (asserts! (get cancelled tournament) err-not-cancelled)
-        (asserts! (not (get prizes-distributed tournament)) err-already-distributed)
-        (let ((stake (unwrap! (map-get? tournament-stakes { tournament-id: tournament-id, staker: tx-sender }) err-not-found)))
-            (try! (as-contract (stx-transfer? (get amount stake) tx-sender tx-sender)))
-            (map-delete tournament-stakes { tournament-id: tournament-id, staker: tx-sender })
-        )
-        (ok true)
-    )
-)
+     (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+         (asserts! (is-eq tx-sender contract-owner) err-owner-only)
+         (asserts! (get cancelled tournament) err-not-cancelled)
+         (asserts! (not (get prizes-distributed tournament)) err-already-distributed)
+         (let ((stake (unwrap! (map-get? tournament-stakes { tournament-id: tournament-id, staker: tx-sender }) err-not-found)))
+             (try! (as-contract (stx-transfer? (get amount stake) tx-sender tx-sender)))
+             (map-delete tournament-stakes { tournament-id: tournament-id, staker: tx-sender })
+         )
+         (ok true)
+     )
+ )
+
+(define-public (sponsor-tournament (tournament-id uint) (amount uint))
+     (let ((tournament (unwrap! (map-get? tournaments { tournament-id: tournament-id }) err-not-found)))
+         (asserts! (get is-active tournament) err-not-active)
+         (asserts! (> amount u0) err-invalid-amount)
+         (try! (stx-transfer? amount tx-sender (as-contract tx-sender)))
+         (map-set tournaments
+             { tournament-id: tournament-id }
+             (merge tournament { prize-pool: (+ (get prize-pool tournament) amount) })
+         )
+         (let ((existing-sponsor (default-to u0 (get amount (map-get? sponsor-contributions { tournament-id: tournament-id, sponsor: tx-sender })))))
+             (map-set sponsor-contributions
+                 { tournament-id: tournament-id, sponsor: tx-sender }
+                 { amount: (+ existing-sponsor amount) }
+             )
+         )
+         (ok true)
+     )
+ )
+
+(define-read-only (get-sponsor-contribution (tournament-id uint) (sponsor principal))
+     (ok (unwrap! (map-get? sponsor-contributions { tournament-id: tournament-id, sponsor: sponsor }) err-not-found))
+ )
