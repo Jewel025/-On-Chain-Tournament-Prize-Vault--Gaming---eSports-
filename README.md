@@ -14,6 +14,7 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 - 💰 Community staking
 - 🎲 Game proposal system
 - 🎁 Tournament sponsorship system
+- 📊 Player statistics tracking
 
 ## Smart Contract Functions
 
@@ -34,6 +35,7 @@ The On-Chain Tournament Prize Vault is a decentralized solution for managing and
 - `get-tournament-info`: View tournament details
 - `get-participant-status`: Check player registration
 - `get-sponsor-contribution`: Track sponsorship amounts per tournament
+- `get-player-stats`: Retrieve player performance metrics
 
 ## Usage
 

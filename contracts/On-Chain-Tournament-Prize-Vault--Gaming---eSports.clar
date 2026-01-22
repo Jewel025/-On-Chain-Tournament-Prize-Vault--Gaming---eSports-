@@ -67,6 +67,15 @@
      { amount: uint }
  )
 
+(define-map player-stats
+    { player: principal }
+    {
+        total-participated: uint,
+        total-wins: uint,
+        total-earnings: uint
+    }
+)
+
 (define-public (create-tournament (name (string-ascii 50)) (game (string-ascii 50)) (start-time uint) (end-time uint))
     (let ((tournament-id (var-get total-tournaments)))
         (asserts! (is-eq tx-sender contract-owner) err-owner-only)
@@ -105,6 +114,12 @@
         (map-insert participant-badges
             { tournament-id: tournament-id, player: tx-sender }
             { registered: true }
+        )
+        (let ((existing-stats (default-to { total-participated: u0, total-wins: u0, total-earnings: u0 } (map-get? player-stats { player: tx-sender }))))
+            (map-set player-stats
+                { player: tx-sender }
+                (merge existing-stats { total-participated: (+ (get total-participated existing-stats) u1) })
+            )
         )
         (ok true)
     )
@@ -253,20 +268,38 @@
         
         (let ((first-prize (/ (* prize-pool (get first-place-percent distribution)) u100)))
             (try! (as-contract (stx-transfer? first-prize tx-sender first-winner)))
+            (let ((existing-stats (default-to { total-participated: u0, total-wins: u0, total-earnings: u0 } (map-get? player-stats { player: first-winner }))))
+                (map-set player-stats
+                    { player: first-winner }
+                    (merge existing-stats { total-wins: (+ (get total-wins existing-stats) u1), total-earnings: (+ (get total-earnings existing-stats) first-prize) })
+                )
+            )
         )
         
         (match second-winner
-            some-second 
+            some-second
                 (let ((second-prize (/ (* prize-pool (get second-place-percent distribution)) u100)))
                     (try! (as-contract (stx-transfer? second-prize tx-sender some-second)))
+                    (let ((existing-stats (default-to { total-participated: u0, total-wins: u0, total-earnings: u0 } (map-get? player-stats { player: some-second }))))
+                        (map-set player-stats
+                            { player: some-second }
+                            (merge existing-stats { total-wins: (+ (get total-wins existing-stats) u1), total-earnings: (+ (get total-earnings existing-stats) second-prize) })
+                        )
+                    )
                 )
             true
         )
         
         (match third-winner
-            some-third 
+            some-third
                 (let ((third-prize (/ (* prize-pool (get third-place-percent distribution)) u100)))
                     (try! (as-contract (stx-transfer? third-prize tx-sender some-third)))
+                    (let ((existing-stats (default-to { total-participated: u0, total-wins: u0, total-earnings: u0 } (map-get? player-stats { player: some-third }))))
+                        (map-set player-stats
+                            { player: some-third }
+                            (merge existing-stats { total-wins: (+ (get total-wins existing-stats) u1), total-earnings: (+ (get total-earnings existing-stats) third-prize) })
+                        )
+                    )
                 )
             true
         )
@@ -351,3 +384,7 @@
 (define-read-only (get-sponsor-contribution (tournament-id uint) (sponsor principal))
      (ok (unwrap! (map-get? sponsor-contributions { tournament-id: tournament-id, sponsor: sponsor }) err-not-found))
  )
+
+(define-read-only (get-player-stats (player principal))
+    (ok (default-to { total-participated: u0, total-wins: u0, total-earnings: u0 } (map-get? player-stats { player: player })))
+)
